@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Additional Info</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h2>사용자 추가 정보 입력</h2>
+    <form action="/user/info" method="POST">
+        <div>
+            <label for="gender">성별:</label>
+            <select name="gender" id="gender">
+                <option value="male">남성</option>
+                <option value="female">여성</option>
+                <option value="other">기타</option>
+            </select>
+        </div>
+        <div>
+            <label for="name">이름:</label>
+            <input type="text" id="name" name="name" required>
+        </div>
+        <div>
+            <label for="phoneNumber">전화번호:</label>
+            <input type="text" id="phoneNumber" name="phoneNumber" required>
+        </div>
+        <div>
+            <label for="birthday">생일:</label>
+            <input type="date" id="birthday" name="birthday" required>
+        </div>
+        <div>
+            <label for="picture">프로필 사진 URL:</label>
+            <input type="text" id="picture" name="picture">
+        </div>
+        <div>
+            <label for="nickname">닉네임:</label>
+            <input type="text" id="nickname" name="nickname" required>
+        </div>
+        <div>
+            <label for="introduce">자기소개:</label>
+            <textarea id="introduce" name="introduce" rows="4" required></textarea>
+        </div>
+        <button type="submit">정보 제출</button>
+    </form>
+</body>
+</html>

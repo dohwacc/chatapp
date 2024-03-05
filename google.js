@@ -3,30 +3,39 @@ const express = require("express");
 const session = require("express-session");
 const MySQLStore = require("express-mysql-session")(session);
 const passport = require("passport");
+const bodyParser = require("body-parser");
 const fs = require("fs");
+const mysql = require('mysql2');
 const GoogleStrategy = require("passport-google-oauth2").Strategy;
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const PORT = 8080;
 
-// 위의 Google Developers Console에서 생성한 client id와 secret
-const GOOGLE_CLIENT_ID = "868371166608-du1ethco3tk8harlavu5bb25gvd76oqr.apps.googleusercontent.com";
-const GOOGLE_CLIENT_SECRET = "868371166608-du1ethco3tk8harlavu5bb25gvd76oqr.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "984288233831-e3ukerm8gvi159hdnpejqr34jm0fr1pj.apps.googleusercontent.com";
+const GOOGLE_CLIENT_SECRET = "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";
 
-// db session store options
-const options = {
+const dbConfig = {
     host: "localhost",
     port: 3306,
     user: "root",
-    password: "root",
-    database: "session_test",
+    password: "par1k7208!",
+    database: "ssaltalk",
 };
 
-// mysql session store 생성
+const db = mysql.createPool(dbConfig).promise();
+
+const options = {
+    host: dbConfig.host,
+    port: dbConfig.port,
+    user: dbConfig.user,
+    password: dbConfig.password,
+    database: dbConfig.database,
+};
+
 const sessionStore = new MySQLStore(options);
 
-// express session 연결
 app.use(
     session({
         secret: "secret key",
@@ -35,29 +44,20 @@ app.use(
         saveUninitialized: false,
     })
 );
-// image 사용을 위한 static folder 지정
-app.use(express.static("public"));
 
-// passport 초기화 및 session 연결
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static("public"));
 app.use(passport.initialize());
 app.use(passport.session());
 
-// login이 최초로 성공했을 때만 호출되는 함수
-// done(null, user.id)로 세션을 초기화 한다.
 passport.serializeUser(function (user, done) {
-    done(null, user.id);
+    done(null, user);
 });
 
-// 사용자가 페이지를 방문할 때마다 호출되는 함수
-// done(null, id)로 사용자의 정보를 각 request의 user 변수에 넣어준다.
 passport.deserializeUser(function (id, done) {
     done(null, id);
 });
 
-// Google login 전략
-// 로그인 성공 시 callback으로 request, accessToken, refreshToken, profile 등이 나온다.
-// 해당 콜백 function에서 사용자가 누구인지 done(null, user) 형식으로 넣으면 된다.
-// 이 예시에서는 넘겨받은 profile을 전달하는 것으로 대체했다.
 passport.use(
     new GoogleStrategy(
         {
@@ -66,66 +66,81 @@ passport.use(
             callbackURL: "http://localhost:8080/auth/google/callback",
             passReqToCallback: true,
         },
-        function (request, accessToken, refreshToken, profile, done) {
-            console.log(profile);
-            console.log(accessToken);
-
-            return done(null, profile);
+        async function (request, accessToken, refreshToken, profile, done) {
+            try {
+                // 여기에 사용자를 데이터베이스에 저장하는 코드를 추가할 수 있습니다.
+                // 예를 들어, profile.id로 사용자를 조회하고, 없으면 새로 추가하는 로직 등
+                // const user = await db.query('SELECT * FROM users WHERE googleId = ?', [profile.id]);
+                // if (!user) {
+                //     await db.query('INSERT INTO users SET ?', { googleId: profile.id, ... });
+                // }
+                
+                const user = {
+                    id: profile.id,
+                    email: profile.email
+                }
+                
+                
+                done(null, user);
+            } catch (error) {
+                console.error(`Error during GoogleStrategy callback: ${error.message}`);
+                done(error);
+            }
         }
     )
 );
 
-// login 화면
-// 이미 로그인한 회원이라면(session 정보가 존재한다면) main화면으로 리다이렉트
 app.get("/login", (req, res) => {
     if (req.user) return res.redirect("/");
-    fs.readFile("./webpage/login.html", (error, data) => {
-        if (error) {
-            console.log(error);
-            return res.sendStatus(500);
-        }
-
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(data);
-    });
+    res.sendFile(path.join(__dirname, 'webpage', 'login.html'));
 });
 
-// login 화면
-// 로그인 하지 않은 회원이라면(session 정보가 존재하지 않는다면) login화면으로 리다이렉트
 app.get("/", (req, res) => {
     if (!req.user) return res.redirect("/login");
-    fs.readFile("./webpage/main.html", (error, data) => {
-        if (error) {
-            console.log(error);
-            return res.sendStatus(500);
-        }
-
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(data);
-    });
+    res.sendFile(path.join(__dirname, 'webpage', 'main.html'));
 });
 
-// google login 화면
-app.get(
-    "/auth/google",
-    passport.authenticate("google", { scope: ["email", "profile"] })
+app.get("/auth/google", passport.authenticate("google", { scope: ["email", "profile"] }));
+
+app.get("/auth/google/callback",
+    passport.authenticate("google", { failureRedirect: "/login" }),
+    function(req, res) {
+        res.redirect("/user/info");
+    }
 );
 
-// google login 성공과 실패 리다이렉트
-app.get(
-    "/auth/google/callback",
-    passport.authenticate("google", {
-        successRedirect: "/",
-        failureRedirect: "/login",
-    })
-);
-
-// logout
 app.get("/logout", (req, res) => {
     req.logout();
     res.redirect("/login");
 });
 
+app.get('/user/info', (req, res) => {
+    if (!req.user) return res.redirect('/login');
+    res.sendFile(path.join(__dirname, 'webpage', 'user_info.html'));
+});
+
+app.post('/user/info', async (req, res) => {
+    try {
+        const { gender, name, phoneNumber, birthday, picture, nickname, introduce } = req.body;
+
+        console.log(req.user);
+        const googleOauth = req.user.email;
+        const created = new Date();
+        const query = `INSERT INTO users (gender, name, phoneNumber, birthday, picture, nickname, introduce, googleOauth, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        await db.execute(query, [gender, name, phoneNumber, birthday, picture, nickname, introduce, googleOauth, created]);
+        res.redirect('/');
+    } catch (error) {
+        console.error(`Error in POST /user/info: ${error.message}`);
+        res.status(500).send('사용자 정보를 저장하는 과정에서 문제가 발생했습니다.');
+    }
+});
+
+// 전역 에러 핸들러
+app.use((error, req, res, next) => {
+    console.error(`Global Error Handler: ${error.message}`);
+    res.status(500).send('서버에서 문제가 발생했습니다.');
+});
+
 server.listen(PORT, () => {
-    console.log(`Server running on ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
